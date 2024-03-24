@@ -1,22 +1,115 @@
+from __future__ import annotations
+
 import socket
+from dataclasses import dataclass, field
 from threading import Thread
-
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(("localhost", 3001))
+from time import sleep
 
 
-def listen(client):
-    while True:
-        data = client.recv(1024).decode("utf-8")
-        if data:
-            print(f"\rrecieved: {data}\nmsg: ", end="")
+def extract_command(msg: str):
+    if msg.startswith("/"):
+        return (msg.split()[0], " ".join(msg.split()[1::]))
+
+
+@dataclass
+class Client:
+    ip: str = "localhost"
+    port: int = 8888
+    uid: str = None
+    name: str = None
+    room: str = None
+    con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    commands: dict[str, Any] = field(default_factory=dict)
+
+    # command system
+    def command(self, cmd: str):
+        def inner_command(f):
+            self.commands[cmd] = f
+            return f
+
+        return inner_command
+
+    # calls function based on command from client
+    def dispath(self, cmd: str, *args, **kwargs):
+        if cmd in self.commands:
+            self.commands[cmd](self, *args, **kwargs)
         else:
-            continue
+            self.cprint(f"got command {cmd} with data {args[0]}")
+
+    @property
+    def tag(self):
+        return self.name or self.uid
+
+    def cprint(self, text: str) -> None:
+        print(f"\r{' '*40}\r{text}\n{self.tag} {self.room or ''} msg: ", end="")
+
+    def connect(self) -> Client:
+        self.con.connect((self.ip, self.port))
+        Thread(target=self.listen, daemon=True).start()
+        return self
+
+    def listen(self):
+        cprint = self.cprint
+        while True:
+            msg: str = self.con.recv(1024).decode("utf-8")
+            if msg:
+                if cmd := extract_command(msg):
+                    self.dispath(cmd[0], cmd[1])
+                else:
+                    cprint(f"server: {msg}")
+            # if msg:
+            #     if cmd := extract_command(msg):
+            #         match cmd[0]:
+            #             case "/relay":
+            #                 cprint(cmd[1])
+            #             case "/name":
+            #                 self.name = cmd[1]
+            #                 cprint("info: changed name")
+            #             case "/uid":
+            #                 self.name = cmd[1]
+            #                 cprint("info: got uid")
+            #             case "/connected":
+            #                 cprint("info: connected to server")
+            #             case "/info":
+            #                 cprint(cmd[1])
+            #             case "/room":
+            #                 self.room = cmd[1]
+            #                 cprint(f"joined room {cmd[1]}")
+            else:
+                continue
+
+    def chat(self):
+        while True:
+            msg = input(f"{self.tag} {self.room or ''} msg: ").encode("utf-8")
+            if msg:
+                self.con.send(msg)
+
+    def test(self):
+        for i in range(1000000):
+            self.con.send(str(i).encode("utf-8"))
+            sleep(0.0001)
 
 
-Thread(target=listen, args=(client,), daemon=True).start()
+if __name__ == "__main__":
+    client = Client()
 
-while True:
-    msg = input("msg: ").encode("utf-8")
-    if msg:
-        client.send(msg)
+    @client.command("/info")
+    def info(client, data):
+        cprint(data)
+
+    @client.command("/uid")
+    def set_uid(client, data):
+        client.uid = data
+        client.cprint(f"connected with uid {data}")
+
+    @client.command("/name")
+    def set_name(client, data):
+        client.name = data
+        client.cprint(f"changed name to {data}")
+
+    @client.command("/room")
+    def set_name(client, data):
+        client.room = data
+        client.cprint(f"connected to room {data}")
+
+    client.connect().chat()
