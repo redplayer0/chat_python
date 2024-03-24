@@ -57,24 +57,6 @@ class Client:
                     self.dispath(cmd[0], cmd[1])
                 else:
                     cprint(f"server: {msg}")
-            # if msg:
-            #     if cmd := extract_command(msg):
-            #         match cmd[0]:
-            #             case "/relay":
-            #                 cprint(cmd[1])
-            #             case "/name":
-            #                 self.name = cmd[1]
-            #                 cprint("info: changed name")
-            #             case "/uid":
-            #                 self.name = cmd[1]
-            #                 cprint("info: got uid")
-            #             case "/connected":
-            #                 cprint("info: connected to server")
-            #             case "/info":
-            #                 cprint(cmd[1])
-            #             case "/room":
-            #                 self.room = cmd[1]
-            #                 cprint(f"joined room {cmd[1]}")
             else:
                 continue
 
@@ -95,7 +77,11 @@ if __name__ == "__main__":
 
     @client.command("/info")
     def info(client, data):
-        cprint(data)
+        client.cprint(data)
+
+    @client.command("/relay")
+    def info(client, data):
+        client.cprint(data)
 
     @client.command("/uid")
     def set_uid(client, data):
